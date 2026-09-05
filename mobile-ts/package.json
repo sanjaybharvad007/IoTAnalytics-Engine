@@ -1,0 +1,7 @@
+{
+  "name": "iotanalytics-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "React Native-style field-ops mobile client (TypeScript)",
+  "devDependencies": { "typescript": "^5.4.0" }
+}
