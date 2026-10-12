@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ["*"] }
+  - package-ecosystem: npm
+    directory: /client-ts
+    schedule: { interval: weekly }
+    groups:
+      dev-dependencies: { dependency-type: development }
+  - package-ecosystem: docker
+    directory: /
+    schedule: { interval: weekly }
+  - package-ecosystem: gomod
+    directory: /
+    schedule: { interval: weekly }

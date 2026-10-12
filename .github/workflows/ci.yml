@@ -1,0 +1,140 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go ${{ matrix.go }} · vet · race · coverage
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ["1.22", "stable"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+      - name: gofmt
+        run: test -z "$(gofmt -l . | grep -v client-ts)" || { gofmt -l .; exit 1; }
+      - name: go vet
+        run: go vet ./...
+      - name: Tests (race detector, coverage)
+        run: go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+      - name: Coverage summary
+        run: go tool cover -func=coverage.out | tail -1
+      - uses: actions/upload-artifact@v4
+        if: matrix.go == 'stable'
+        with:
+          name: coverage
+          path: coverage.out
+      - name: Benchmarks (smoke)
+        if: matrix.go == 'stable'
+        run: go test -run '^$' -bench . -benchtime=200x ./...
+
+  lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: stable, cache: true }
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.1
+
+  smoke:
+    name: End-to-end smoke (server + simulator + API)
+    runs-on: ubuntu-latest
+    needs: [go]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: stable, cache: true }
+      - name: Build
+        run: make build
+      - name: Run server with simulator and exercise the API
+        run: |
+          ./bin/server -simulate 6 -tick 250ms -addr :8080 -log-format json > server.log 2>&1 &
+          SERVER=$!
+          for i in $(seq 1 20); do curl -fs localhost:8080/healthz && break || sleep 0.5; done
+          ./bin/simulator -url http://localhost:8080 -vehicles 3 -interval 500ms > sim.log 2>&1 &
+          SIM=$!
+          sleep 45
+          set -x
+          curl -fs localhost:8080/api/v1/fleet | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d["summary"]["vehicles"]>=6, d'
+          curl -fs localhost:8080/api/v1/alerts | python3 -c 'import sys,json; a=json.load(sys.stdin); assert len(a)>0, "no alerts raised"'
+          curl -fs localhost:8080/api/v1/zones | grep -q '"depot"'
+          curl -fs localhost:8080/metrics | grep -q '^iot_alerts_raised_total'
+          curl -fs localhost:8080/ | grep -q 'EventSource'
+          curl -fs --max-time 3 -N "localhost:8080/api/v1/stream?after=0" | grep -q '^id: 1$'
+          ./bin/server -healthcheck -addr :8080
+          kill -INT $SIM $SERVER; wait $SERVER
+          grep -q '"msg":"stopped"' server.log
+          test -s data/ops.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-logs
+          path: |
+            server.log
+            sim.log
+
+  typescript:
+    name: TypeScript client · tsc strict · node:test
+    runs-on: ubuntu-latest
+    defaults:
+      run: { working-directory: client-ts }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: client-ts/package-lock.json
+      - run: npm ci
+      - run: npm test
+
+  docker:
+    name: Docker image · build · healthcheck
+    runs-on: ubuntu-latest
+    needs: [go]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: iotanalytics/engine:ci
+          build-args: VERSION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Run container and probe it
+        run: |
+          docker run -d --name engine -p 8080:8080 -e IOT_SIMULATE=3 -e IOT_SYNC=none iotanalytics/engine:ci
+          for i in $(seq 1 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' engine)
+            [ "$status" = healthy ] && break
+            sleep 1
+          done
+          docker inspect -f '{{.State.Health.Status}}' engine | grep -q healthy
+          curl -fs localhost:8080/api/v1/stats
+          docker logs engine | tail -5
+          docker rm -f engine
+      - name: Validate compose file
+        run: docker compose config -q

@@ -264,6 +264,7 @@
       state.zonesByVehicle = new Map();
       for (const [zone, ids] of Object.entries(zones.occupancy || {})) for (const id of ids) state.zonesByVehicle.set(id, [...(state.zonesByVehicle.get(id) || []), zone]);
       state.alertCount = stats.alerts_raised;
+      if (stats.last_seq > state.lastSeq) { state.lastSeq = stats.last_seq; $('seq').textContent = `seq ${stats.last_seq}`; }
       renderKPIs(fleet.summary); renderTable(); renderMap();
       $('uptime').textContent = `up ${(stats.uptime_seconds / 60).toFixed(0)}m`;
       const elapsed = (Date.now() - state.rate.since) / 1000;
