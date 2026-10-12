@@ -124,14 +124,20 @@ func (h *harshBraking) Evaluate(r telematics.Reading) *Alert {
 	if dt <= 0 || dt > 30 { // gap too large to infer acceleration
 		return nil
 	}
-	decel := (prev.Speed - r.Speed) / dt
-	if decel <= h.limit {
+	drop := prev.Speed - r.Speed
+	decel := drop / dt
+	// Require a meaningful absolute drop as well as a high rate so that
+	// sensor jitter between rapid samples cannot masquerade as a harsh event.
+	if decel <= h.limit || drop < MinHarshDropKph {
 		return nil
 	}
 	return &Alert{VehicleID: r.VehicleID, Kind: "harsh_braking", Severity: Critical, Value: decel,
 		Threshold: h.limit, At: r.Timestamp,
 		Message: fmt.Sprintf("decelerated %.0f km/h in %.1fs (%.1f km/h/s)", prev.Speed-r.Speed, dt, decel)}
 }
+
+// MinHarshDropKph is the smallest speed drop HarshBraking will consider.
+const MinHarshDropKph = 10.0
 
 // ExcessiveIdle is a stateful rule that tracks how long each vehicle has been
 // idling (engine on, stationary) and raises a Warning once the continuous idle

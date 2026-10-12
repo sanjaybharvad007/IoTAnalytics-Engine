@@ -73,6 +73,12 @@ func TestHarshBraking(t *testing.T) {
 	if rule.Evaluate(reading(0, 50, 5*time.Minute)) != nil {
 		t.Fatal("gap > 30s should be ignored")
 	}
+	// Jitter between rapid samples: a 5 km/h drop in 0.2 s is a 25 km/h/s
+	// rate but far too small an absolute change to be a braking event.
+	rule.Evaluate(reading(60, 50, 10*time.Minute))
+	if rule.Evaluate(reading(55, 50, 10*time.Minute+200*time.Millisecond)) != nil {
+		t.Fatal("small absolute drop should be ignored regardless of rate")
+	}
 }
 
 func TestExcessiveIdleFiresOncePerEpisode(t *testing.T) {

@@ -1,7 +1,9 @@
 package geofence
 
 import (
+	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -108,6 +110,18 @@ func TestMultipleZonesAndOccupancy(t *testing.T) {
 	m.Forget("a")
 	if len(m.Occupancy()["depot"]) != 0 {
 		t.Error("forgotten vehicle should leave occupancy")
+	}
+}
+
+func TestTransitionJSONUsesSeconds(t *testing.T) {
+	tr := Transition{Zone: "depot", VehicleID: "v", Event: Exit, At: t0, Dwell: 90 * time.Second}
+	b, err := json.Marshal(tr)
+	if err != nil || !strings.Contains(string(b), `"dwell_seconds":90`) {
+		t.Fatalf("json = %s (%v)", b, err)
+	}
+	var back Transition
+	if err := json.Unmarshal(b, &back); err != nil || back.Dwell != 90*time.Second || back.Event != Exit {
+		t.Fatalf("round trip = %+v (%v)", back, err)
 	}
 }
 

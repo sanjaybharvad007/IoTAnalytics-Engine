@@ -1,6 +1,7 @@
 package geofence
 
 import (
+	"encoding/json"
 	"sort"
 	"sync"
 	"time"
@@ -25,7 +26,33 @@ type Transition struct {
 	Point     geo.Point `json:"point"`
 	At        time.Time `json:"at"`
 	// Dwell is how long the vehicle spent inside the zone; set on Exit only.
-	Dwell time.Duration `json:"dwell_seconds,omitempty"`
+	// It is serialised as fractional seconds under "dwell_seconds".
+	Dwell time.Duration `json:"-"`
+}
+
+type transitionJSON struct {
+	Zone         string    `json:"zone"`
+	VehicleID    string    `json:"vehicle_id"`
+	Event        Event     `json:"event"`
+	Point        geo.Point `json:"point"`
+	At           time.Time `json:"at"`
+	DwellSeconds float64   `json:"dwell_seconds,omitempty"`
+}
+
+// MarshalJSON encodes Dwell as seconds rather than Go's nanosecond integer.
+func (t Transition) MarshalJSON() ([]byte, error) {
+	return json.Marshal(transitionJSON{t.Zone, t.VehicleID, t.Event, t.Point, t.At, t.Dwell.Seconds()})
+}
+
+// UnmarshalJSON is the inverse of MarshalJSON.
+func (t *Transition) UnmarshalJSON(b []byte) error {
+	var j transitionJSON
+	if err := json.Unmarshal(b, &j); err != nil {
+		return err
+	}
+	*t = Transition{Zone: j.Zone, VehicleID: j.VehicleID, Event: j.Event, Point: j.Point, At: j.At,
+		Dwell: time.Duration(j.DwellSeconds * float64(time.Second))}
+	return nil
 }
 
 type membership struct {

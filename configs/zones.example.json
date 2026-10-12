@@ -1,0 +1,24 @@
+[
+  {
+    "name": "depot",
+    "type": "circle",
+    "center": { "lat": 37.3382, "lng": -121.8863 },
+    "radius_m": 800
+  },
+  {
+    "name": "sjc_airport",
+    "type": "circle",
+    "center": { "lat": 37.3639, "lng": -121.9289 },
+    "radius_m": 1500
+  },
+  {
+    "name": "downtown",
+    "type": "polygon",
+    "vertices": [
+      { "lat": 37.3460, "lng": -121.9050 },
+      { "lat": 37.3460, "lng": -121.8750 },
+      { "lat": 37.3250, "lng": -121.8750 },
+      { "lat": 37.3250, "lng": -121.9050 }
+    ]
+  }
+]
