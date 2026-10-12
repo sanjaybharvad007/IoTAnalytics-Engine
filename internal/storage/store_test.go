@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -31,7 +32,7 @@ func TestAppendAssignsSequenceAndReplays(t *testing.T) {
 	if err := s1.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s1.Append(TypeAlert, "v1", nil); err != ErrClosed {
+	if _, err := s1.Append(TypeAlert, "v1", nil); !errors.Is(err, ErrClosed) {
 		t.Fatalf("append after close should fail with ErrClosed, got %v", err)
 	}
 

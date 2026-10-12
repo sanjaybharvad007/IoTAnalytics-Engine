@@ -107,7 +107,9 @@ func (f *Fleet) Summarize() Summary {
 	const lowFuel = 15.0
 	s := Summary{LowFuelCutoff: lowFuel}
 	var speedSum float64
-	for _, snap := range f.Snapshots() {
+	snaps := f.Snapshots()
+	for i := range snaps {
+		snap := &snaps[i]
 		s.Vehicles++
 		speedSum += snap.AvgSpeed
 		s.TotalDistM += snap.DistanceM

@@ -1,6 +1,7 @@
 package geo
 
 import (
+	"errors"
 	"math"
 	"testing"
 )
@@ -48,7 +49,7 @@ func TestValidate(t *testing.T) {
 		{Point{math.NaN(), 0}, ErrOutOfRange},
 	}
 	for _, c := range cases {
-		if got := c.p.Validate(); got != c.want {
+		if got := c.p.Validate(); !errors.Is(got, c.want) {
 			t.Errorf("Validate(%v) = %v, want %v", c.p, got, c.want)
 		}
 	}

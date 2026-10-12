@@ -17,7 +17,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -trimpath \
       -ldflags="-s -w -X main.version=${VERSION}" \
-      -o /out/app ./cmd/${CMD}
+      -o /out/app ./cmd/${CMD} \
+    && mkdir -p /out/data
 
 # ---- runtime ---------------------------------------------------------------
 FROM gcr.io/distroless/static-debian12:nonroot AS runtime
@@ -27,7 +28,10 @@ LABEL org.opencontainers.image.title="IoTAnalytics-Engine" \
       org.opencontainers.image.licenses="MIT"
 WORKDIR /
 COPY --from=build /out/app /app
-# Durable event log lives on a volume.
+# Durable event log lives on a volume. The directory must be owned by the
+# nonroot user (uid 65532) or the server cannot create its log file; Docker
+# copies this ownership into freshly created volumes.
+COPY --from=build --chown=65532:65532 /out/data /data
 VOLUME ["/data"]
 ENV IOT_ADDR=:8080 \
     IOT_DATA=/data/ops.log \

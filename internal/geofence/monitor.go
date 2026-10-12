@@ -128,7 +128,7 @@ func (m *Monitor) Update(vehicleID string, p geo.Point, at time.Time) []Transiti
 func (m *Monitor) Inside(vehicleID string) []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	var names []string
+	names := make([]string, 0, len(m.inside[vehicleID]))
 	for z := range m.inside[vehicleID] {
 		names = append(names, z)
 	}

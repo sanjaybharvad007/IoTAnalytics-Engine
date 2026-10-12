@@ -93,10 +93,15 @@ func TestConcurrentSubscribeCloseAndPublish(t *testing.T) {
 
 func BenchmarkPublish(b *testing.B) {
 	bus := New[int]()
-	for i := 0; i < 10; i++ {
-		s := bus.Subscribe(1 << 16)
-		defer s.Close()
+	subs := make([]*Subscription[int], 10)
+	for i := range subs {
+		subs[i] = bus.Subscribe(1 << 16)
 	}
+	defer func() {
+		for _, s := range subs {
+			s.Close()
+		}
+	}()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		bus.Publish(i)

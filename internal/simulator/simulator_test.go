@@ -2,6 +2,7 @@ package simulator
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"path/filepath"
 	"testing"
@@ -94,7 +95,7 @@ func TestRunStopsOnCancel(t *testing.T) {
 	defer cancel()
 	var n int
 	err := Run(ctx, f, func(telematics.Reading) { n++ })
-	if err != context.DeadlineExceeded {
+	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v", err)
 	}
 	if n < 4 {

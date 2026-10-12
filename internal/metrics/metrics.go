@@ -128,7 +128,9 @@ func (e *Exporter) Write(w io.Writer) {
 	p.header("iot_vehicle_speed_kph", "Rolling average speed per vehicle.", "gauge")
 	p.header("iot_vehicle_fuel_percent", "Latest fuel level per vehicle.", "gauge")
 	p.header("iot_vehicle_idle_ratio", "Share of engine-on samples spent idling per vehicle.", "gauge")
-	for _, s := range fleet.Snapshots() {
+	snaps := fleet.Snapshots()
+	for i := range snaps {
+		s := &snaps[i]
 		l := labels{"vehicle": s.VehicleID}
 		p.sample("iot_vehicle_speed_kph", l, s.AvgSpeed)
 		p.sample("iot_vehicle_fuel_percent", l, s.FuelLevel)
@@ -185,7 +187,7 @@ func (p *printer) sample(name string, l labels, v float64) {
 	sort.Strings(keys)
 	parts := make([]string, len(keys))
 	for i, k := range keys {
-		parts[i] = fmt.Sprintf(`%s="%s"`, k, escape(l[k]))
+		parts[i] = k + `="` + escape(l[k]) + `"`
 	}
 	fmt.Fprintf(p.w, "%s{%s} %s\n", name, strings.Join(parts, ","), format(v))
 }

@@ -110,8 +110,10 @@ type harshBraking struct {
 	last  map[string]telematics.Reading
 }
 
+// Name implements Rule.
 func (h *harshBraking) Name() string { return "harsh_braking" }
 
+// Evaluate implements Rule.
 func (h *harshBraking) Evaluate(r telematics.Reading) *Alert {
 	h.mu.Lock()
 	prev, ok := h.last[r.VehicleID]
@@ -153,8 +155,10 @@ type excessiveIdle struct {
 	fired map[string]bool
 }
 
+// Name implements Rule.
 func (e *excessiveIdle) Name() string { return "excessive_idle" }
 
+// Evaluate implements Rule.
 func (e *excessiveIdle) Evaluate(r telematics.Reading) *Alert {
 	e.mu.Lock()
 	defer e.mu.Unlock()

@@ -98,7 +98,7 @@ func FromSpec(s Spec) (Zone, error) {
 			return nil, fmt.Errorf("%w %q: circle needs center and radius_m > 0", ErrInvalidZone, s.Name)
 		}
 		if err := s.Center.Validate(); err != nil {
-			return nil, fmt.Errorf("%w %q: %v", ErrInvalidZone, s.Name, err)
+			return nil, fmt.Errorf("%w %q: %w", ErrInvalidZone, s.Name, err)
 		}
 		return Circle{ZoneName: s.Name, Center: *s.Center, RadiusM: s.RadiusM}, nil
 	case "polygon":
@@ -107,7 +107,7 @@ func FromSpec(s Spec) (Zone, error) {
 		}
 		for _, v := range s.Vertices {
 			if err := v.Validate(); err != nil {
-				return nil, fmt.Errorf("%w %q: %v", ErrInvalidZone, s.Name, err)
+				return nil, fmt.Errorf("%w %q: %w", ErrInvalidZone, s.Name, err)
 			}
 		}
 		return Polygon{ZoneName: s.Name, Vertices: append([]geo.Point(nil), s.Vertices...)}, nil

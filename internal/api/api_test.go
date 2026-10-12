@@ -260,7 +260,7 @@ func readSSE(ctx context.Context, body io.Reader, n int) ([]sseEvent, error) {
 				cur.data = line[6:]
 			}
 		}
-		ch <- fmt.Errorf("stream ended after %d events: %v", len(out), sc.Err())
+		ch <- fmt.Errorf("stream ended after %d events: %w", len(out), sc.Err())
 	}()
 	select {
 	case err := <-ch:

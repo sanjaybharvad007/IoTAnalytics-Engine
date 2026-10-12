@@ -51,7 +51,7 @@ func (r Reading) Validate() error {
 		return fmt.Errorf("%w: got %.1f", ErrBadFuel, r.FuelLevel)
 	}
 	if err := r.Position().Validate(); err != nil {
-		return fmt.Errorf("%w: %v", ErrBadPosition, err)
+		return fmt.Errorf("%w: %w", ErrBadPosition, err)
 	}
 	return nil
 }

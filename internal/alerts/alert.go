@@ -17,6 +17,7 @@ import (
 // meaningful: Critical > Warning > Info.
 type Severity int
 
+// Severity levels, lowest to highest.
 const (
 	Info Severity = iota + 1
 	Warning
