@@ -23,7 +23,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM gcr.io/distroless/static-debian12:nonroot AS runtime
 LABEL org.opencontainers.image.title="IoTAnalytics-Engine" \
       org.opencontainers.image.description="Real-time IoT fleet analytics: sliding windows, safety alerts, geofencing, durable event log, SSE + Prometheus" \
-      org.opencontainers.image.source="https://github.com/your-org/IoTAnalytics-Engine" \
+      org.opencontainers.image.source="https://github.com/sanjaybharvad007/IoTAnalytics-Engine" \
       org.opencontainers.image.licenses="MIT"
 WORKDIR /
 COPY --from=build /out/app /app
