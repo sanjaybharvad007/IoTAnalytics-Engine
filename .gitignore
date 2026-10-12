@@ -1,0 +1,21 @@
+# Go build output
+/bin/
+/server
+/simulator
+*.test
+*.out
+coverage.*
+
+# Runtime data
+/data/
+*.log
+
+# Node
+node_modules/
+client-ts/dist/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
