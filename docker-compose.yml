@@ -1,0 +1,76 @@
+# Full local stack: engine (with built-in simulator) + Prometheus + Grafana.
+#
+#   docker compose up --build
+#   open http://localhost:8080   (live dashboard)
+#        http://localhost:3000   (Grafana, provisioned "Fleet Operations" board)
+#        http://localhost:9090   (Prometheus)
+#
+#   docker compose --profile external-sim up --build   # add a device emulator
+#   that POSTs telemetry over the public ingest API instead of in-process.
+
+name: iotanalytics
+
+services:
+  engine:
+    build:
+      context: .
+      args: { CMD: server }
+    image: iotanalytics/engine:local
+    container_name: iot-engine
+    ports: ["8080:8080"]
+    environment:
+      IOT_SIMULATE: "8"          # built-in fleet; set to 0 when feeding real devices
+      IOT_TICK: "1s"
+      IOT_WINDOW: "5m"
+      IOT_COOLDOWN: "60s"
+      IOT_SPEED_LIMIT: "100"
+      IOT_SYNC: "always"
+      IOT_LOG_FORMAT: "json"
+    volumes:
+      - engine-data:/data
+    restart: unless-stopped
+
+  simulator:
+    profiles: ["external-sim"]
+    build:
+      context: .
+      args: { CMD: simulator }
+    image: iotanalytics/simulator:local
+    command: ["-url", "http://engine:8080", "-vehicles", "6", "-interval", "1s"]
+    depends_on:
+      engine: { condition: service_healthy }
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: iot-prometheus
+    ports: ["9090:9090"]
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    depends_on: [engine]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: iot-grafana
+    ports: ["3000:3000"]
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"      # demo convenience; remove for real deployments
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/fleet-operations.json
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on: [prometheus]
+    restart: unless-stopped
+
+volumes:
+  engine-data:
+  prometheus-data:
+  grafana-data:

@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -37,6 +38,9 @@ import (
 	"iotanalytics/web"
 )
 
+// version is injected at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
 type config struct {
 	addr            string
 	dataPath        string
@@ -52,6 +56,7 @@ type config struct {
 	corsOrigin      string
 	logFormat       string
 	logLevel        string
+	healthcheck     bool
 }
 
 func parseConfig(args []string) (config, error) {
@@ -71,6 +76,7 @@ func parseConfig(args []string) (config, error) {
 	fs.StringVar(&c.corsOrigin, "cors", envStr("IOT_CORS", "*"), "Access-Control-Allow-Origin value (empty disables CORS)")
 	fs.StringVar(&c.logFormat, "log-format", envStr("IOT_LOG_FORMAT", "text"), "log format: text or json")
 	fs.StringVar(&c.logLevel, "log-level", envStr("IOT_LOG_LEVEL", "info"), "log level: debug, info, warn, error")
+	fs.BoolVar(&c.healthcheck, "healthcheck", false, "probe a running server's /healthz and exit (for container HEALTHCHECKs)")
 	if err := fs.Parse(args); err != nil {
 		return c, err
 	}
@@ -88,6 +94,9 @@ func main() {
 		}
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
+	}
+	if cfg.healthcheck {
+		os.Exit(probe(cfg.addr))
 	}
 	log := newLogger(cfg)
 	if err := run(cfg, log); err != nil {
@@ -115,6 +124,7 @@ func run(cfg config, log *slog.Logger) error {
 		return err
 	}
 	defer store.Close()
+	log.Info("starting", "version", version, "go", runtime.Version())
 	log.Info("event log opened", "path", cfg.dataPath, "replayed", store.Replayed,
 		"discarded", store.Discarded, "last_seq", store.LastSeq(), "sync", cfg.syncMode)
 
@@ -198,6 +208,24 @@ func run(cfg config, log *slog.Logger) error {
 	log.Info("stopped", "ingested", stats.Ingested, "alerts", stats.Alerts,
 		"transitions", stats.Transitions, "stored_events", stats.StoredEvents)
 	return nil
+}
+
+// probe performs an HTTP health check against a server on addr and returns a
+// process exit code. The distroless container image has no shell or curl, so
+// the binary doubles as its own HEALTHCHECK.
+func probe(addr string) int {
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("http://127.0.0.1" + portOf(addr) + "/healthz")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "unhealthy:", err)
+		return 1
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintln(os.Stderr, "unhealthy:", resp.Status)
+		return 1
+	}
+	return 0
 }
 
 // portOf returns the ":port" part of a listen address for log hints.

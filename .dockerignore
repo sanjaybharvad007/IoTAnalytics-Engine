@@ -1,0 +1,10 @@
+.git
+.github
+data/
+bin/
+*.log
+client-ts/node_modules
+client-ts/dist
+deploy/
+docs/
+*.md

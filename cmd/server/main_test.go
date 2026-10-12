@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -42,5 +44,23 @@ func TestDefaultZonesAreValid(t *testing.T) {
 		if _, err := geofence.FromSpec(z.Spec()); err != nil {
 			t.Errorf("zone %s: %v", z.Name(), err)
 		}
+	}
+}
+
+func TestProbe(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	addr := srv.Listener.Addr().String()
+	if code := probe(addr); code != 0 {
+		t.Fatalf("healthy server probed as %d", code)
+	}
+	if code := probe("127.0.0.1:1"); code != 1 {
+		t.Fatalf("unreachable server probed as %d", code)
 	}
 }
