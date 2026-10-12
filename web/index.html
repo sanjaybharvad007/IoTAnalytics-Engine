@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fleet Operations · IoTAnalytics Engine</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%230b0f14' stroke='%233fb6ff' stroke-width='2' stroke-dasharray='4 3'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%232ecc71'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0b0f14; --panel: #121820; --panel-2: #0f141b; --line: #1f2a36;
+    --text: #e6edf3; --muted: #8b98a5; --accent: #3fb6ff;
+    --ok: #2ecc71; --info: #4aa3ff; --warn: #f5a524; --crit: #ff4d4f;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); }
+  a { color: var(--accent); }
+  header {
+    display: flex; align-items: center; gap: 16px; padding: 12px 20px;
+    border-bottom: 1px solid var(--line); background: var(--panel-2);
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  header h1 span { color: var(--muted); font-weight: 400; }
+  .spacer { flex: 1; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+          border: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .pill.live .dot { background: var(--ok); box-shadow: 0 0 0 3px rgba(46,204,113,.18); }
+  .pill.down .dot { background: var(--crit); }
+  main { padding: 16px 20px 32px; display: grid; gap: 16px; max-width: 1500px; margin: 0 auto; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .kpi .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; }
+  .kpi .value { font: 600 26px/1.1 var(--mono); margin-top: 6px; }
+  .kpi .value small { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); gap: 16px; }
+  @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; min-width: 0; }
+  .panel h2 { margin: 0; padding: 10px 14px; font-size: 12px; font-weight: 600; color: var(--muted);
+              text-transform: uppercase; letter-spacing: .6px; border-bottom: 1px solid var(--line);
+              display: flex; align-items: center; gap: 8px; }
+  .panel h2 .count { margin-left: auto; font-family: var(--mono); font-weight: 400; }
+  svg#map { display: block; width: 100%; height: 520px; background:
+    radial-gradient(1200px 600px at 50% 40%, #121a24 0%, #0c1117 70%); }
+  .zone-circle, .zone-poly { fill: rgba(63,182,255,.06); stroke: rgba(63,182,255,.55); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .zone-label { fill: #6fc3ff; font: 11px var(--mono); }
+  .trail { fill: none; stroke-width: 1.5; stroke-opacity: .45; }
+  .vehicle { stroke: #0b0f14; stroke-width: 1.5; }
+  .vehicle-label { fill: var(--text); font: 10px var(--mono); paint-order: stroke; stroke: #0b0f14; stroke-width: 3px; }
+  .legend { display: flex; gap: 14px; padding: 8px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  ul.feed { list-style: none; margin: 0; padding: 0; max-height: 560px; overflow: auto; }
+  ul.feed li { padding: 9px 14px; border-bottom: 1px solid var(--line); display: grid;
+               grid-template-columns: auto 1fr auto; gap: 10px; align-items: baseline; animation: flash .8s ease-out; }
+  @keyframes flash { from { background: rgba(63,182,255,.12); } to { background: transparent; } }
+  .sev { font: 600 10px var(--mono); padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: .4px; }
+  .sev.info { background: rgba(74,163,255,.15); color: var(--info); }
+  .sev.warning { background: rgba(245,165,36,.15); color: var(--warn); }
+  .sev.critical { background: rgba(255,77,79,.18); color: var(--crit); }
+  .sev.geofence { background: rgba(46,204,113,.14); color: var(--ok); }
+  .feed .msg { min-width: 0; }
+  .feed .msg b { font-family: var(--mono); font-weight: 600; }
+  .feed .msg span { color: var(--muted); }
+  .feed time { color: var(--muted); font: 11px var(--mono); white-space: nowrap; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
+  td.num { font-family: var(--mono); text-align: right; }
+  th.num { text-align: right; }
+  .bar { position: relative; width: 90px; height: 8px; background: #1a2430; border-radius: 4px; display: inline-block; vertical-align: middle; margin-right: 8px; }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--ok); }
+  .bar.low i { background: var(--warn); } .bar.crit i { background: var(--crit); }
+  .tag { display: inline-block; font: 11px var(--mono); color: #6fc3ff; border: 1px solid rgba(63,182,255,.35); border-radius: 4px; padding: 0 5px; margin-right: 4px; }
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .empty { padding: 24px; text-align: center; color: var(--muted); }
+  footer { color: var(--muted); font-size: 12px; text-align: center; }
+  footer code { font-family: var(--mono); }
+</style>
+</head>
+<body>
+<header>
+  <h1>IoTAnalytics Engine <span>· Fleet Operations</span></h1>
+  <div class="spacer"></div>
+  <span class="pill" id="seq">seq —</span>
+  <span class="pill" id="uptime">up —</span>
+  <span class="pill" id="conn"><span class="dot"></span><span id="conn-text">connecting</span></span>
+</header>
+
+<main>
+  <section class="kpis" id="kpis">
+    <div class="kpi"><div class="label">Vehicles</div><div class="value" id="k-vehicles">—</div></div>
+    <div class="kpi"><div class="label">Moving</div><div class="value" id="k-moving">—</div></div>
+    <div class="kpi"><div class="label">Idling</div><div class="value" id="k-idling">—</div></div>
+    <div class="kpi"><div class="label">Low fuel</div><div class="value" id="k-lowfuel">—</div></div>
+    <div class="kpi"><div class="label">Avg speed</div><div class="value" id="k-speed">—<small>km/h</small></div></div>
+    <div class="kpi"><div class="label">Window distance</div><div class="value" id="k-dist">—<small>km</small></div></div>
+    <div class="kpi"><div class="label">Alerts</div><div class="value" id="k-alerts">—</div></div>
+    <div class="kpi"><div class="label">Ingest rate</div><div class="value" id="k-rate">—<small>/s</small></div></div>
+  </section>
+
+  <section class="grid">
+    <div class="panel">
+      <h2>Live map <span class="count" id="map-count"></span></h2>
+      <svg id="map" viewBox="0 0 900 520" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Fleet map">
+        <g id="zones"></g><g id="trails"></g><g id="vehicles"></g>
+      </svg>
+      <div class="legend">
+        <span><i style="background:var(--ok)"></i>moving</span>
+        <span><i style="background:var(--warn)"></i>idling</span>
+        <span><i style="background:var(--muted)"></i>engine off</span>
+        <span><i style="background:var(--crit)"></i>alert in last 30 s</span>
+        <span style="margin-left:auto">dashed = geofence</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Alerts &amp; geofence events <span class="count" id="feed-count">0</span></h2>
+      <ul class="feed" id="feed"><li class="empty">Waiting for events…</li></ul>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Vehicles <span class="count" id="veh-count"></span></h2>
+    <div style="overflow:auto">
+    <table>
+      <thead><tr>
+        <th>Vehicle</th><th>Status</th><th class="num">Speed</th><th class="num">Max</th>
+        <th>Fuel</th><th class="num">Idle</th><th class="num">Distance</th><th>Zones</th><th>Last sample</th>
+      </tr></thead>
+      <tbody id="vehicles-body"><tr><td colspan="9" class="empty">No vehicles yet</td></tr></tbody>
+    </table>
+    </div>
+  </section>
+
+  <footer>
+    REST: <code>/api/v1/fleet</code> · <code>/api/v1/alerts</code> · <code>/api/v1/events</code> ·
+    Stream: <code>/api/v1/stream</code> · Metrics: <code>/metrics</code>
+  </footer>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n, d = 0) => (n == null || isNaN(n)) ? '—' : Number(n).toFixed(d);
+  const timeHHMMSS = (iso) => new Date(iso).toLocaleTimeString([], { hour12: false });
+  const ago = (iso) => { const s = (Date.now() - new Date(iso)) / 1000; return s < 60 ? `${s.toFixed(0)}s ago` : `${(s / 60).toFixed(0)}m ago`; };
+
+  const state = {
+    zones: [], vehicles: new Map(), zonesByVehicle: new Map(), trails: new Map(),
+    alertAt: new Map(), feed: [], alertCount: 0, lastSeq: 0,
+    rate: { count: 0, since: Date.now(), value: 0 },
+  };
+  const COLORS = ['#3fb6ff', '#a78bfa', '#f472b6', '#34d399', '#fbbf24', '#fb7185', '#22d3ee', '#c084fc'];
+  const colorFor = (id) => { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length]; };
+
+  // ---- projection: equirectangular around the data centroid ----------------
+  const W = 900, H = 520, PAD = 40;
+  function projector() {
+    const pts = [];
+    for (const z of state.zones) {
+      if (z.type === 'circle') { const d = z.radius_m / 111320; pts.push([z.center.lat + d, z.center.lng], [z.center.lat - d, z.center.lng],
+        [z.center.lat, z.center.lng + d / Math.cos(z.center.lat * Math.PI / 180)], [z.center.lat, z.center.lng - d / Math.cos(z.center.lat * Math.PI / 180)]); }
+      else for (const v of z.vertices) pts.push([v.lat, v.lng]);
+    }
+    for (const v of state.vehicles.values()) if (v.lat || v.lng) pts.push([v.lat, v.lng]);
+    if (pts.length === 0) pts.push([37.3382, -121.8863]);
+    let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+    for (const [la, ln] of pts) { minLat = Math.min(minLat, la); maxLat = Math.max(maxLat, la); minLng = Math.min(minLng, ln); maxLng = Math.max(maxLng, ln); }
+    const cLat = (minLat + maxLat) / 2, cLng = (minLng + maxLng) / 2, k = Math.cos(cLat * Math.PI / 180);
+    const spanX = Math.max((maxLng - minLng) * k, 0.01), spanY = Math.max(maxLat - minLat, 0.01);
+    const scale = Math.min((W - 2 * PAD) / spanX, (H - 2 * PAD) / spanY);
+    const proj = (lat, lng) => [W / 2 + (lng - cLng) * k * scale, H / 2 - (lat - cLat) * scale];
+    proj.metres = (m) => (m / 111320) * scale; // metres -> px
+    return proj;
+  }
+
+  function renderMap() {
+    const proj = projector();
+    const zones = state.zones.map((z) => {
+      if (z.type === 'circle') { const [x, y] = proj(z.center.lat, z.center.lng); const r = proj.metres(z.radius_m);
+        return `<circle class="zone-circle" cx="${x}" cy="${y}" r="${r}"/><text class="zone-label" x="${x}" y="${y - r - 6}" text-anchor="middle">${z.name}</text>`; }
+      const pts = z.vertices.map((v) => proj(v.lat, v.lng));
+      const [lx, ly] = pts.reduce((a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length], [0, 0]);
+      return `<polygon class="zone-poly" points="${pts.map((p) => p.join(',')).join(' ')}"/><text class="zone-label" x="${lx}" y="${ly}" text-anchor="middle">${z.name}</text>`;
+    });
+    $('zones').innerHTML = zones.join('');
+
+    const now = Date.now();
+    const trails = [], dots = [];
+    for (const [id, v] of state.vehicles) {
+      if (!(v.lat || v.lng)) continue;
+      const tr = state.trails.get(id) || [];
+      if (tr.length > 1) trails.push(`<polyline class="trail" stroke="${colorFor(id)}" points="${tr.map(([la, ln]) => proj(la, ln).join(',')).join(' ')}"/>`);
+      const [x, y] = proj(v.lat, v.lng);
+      const recentAlert = (now - (state.alertAt.get(id) || 0)) < 30000;
+      const fill = recentAlert ? 'var(--crit)' : !v.engine_on ? 'var(--muted)' : v.speed < 2 ? 'var(--warn)' : 'var(--ok)';
+      const r = recentAlert ? 7 : 5;
+      dots.push(`<g transform="translate(${x},${y})"><circle class="vehicle" r="${r}" fill="${fill}"/>
+        <text class="vehicle-label" x="9" y="4">${id}</text></g>`);
+    }
+    $('trails').innerHTML = trails.join('');
+    $('vehicles').innerHTML = dots.join('');
+    $('map-count').textContent = `${state.vehicles.size} vehicles · ${state.zones.length} zones`;
+  }
+
+  // ---- panels ----------------------------------------------------------------
+  function renderKPIs(summary) {
+    $('k-vehicles').textContent = summary.vehicles;
+    $('k-moving').textContent = summary.moving;
+    $('k-idling').textContent = summary.idling;
+    $('k-lowfuel').textContent = summary.low_fuel_count;
+    $('k-speed').innerHTML = `${fmt(summary.avg_speed, 1)}<small>km/h</small>`;
+    $('k-dist').innerHTML = `${fmt(summary.total_distance_m / 1000, 2)}<small>km</small>`;
+    $('k-alerts').textContent = state.alertCount;
+  }
+
+  function renderTable() {
+    const rows = [...state.vehicles.values()].sort((a, b) => a.vehicle_id.localeCompare(b.vehicle_id)).map((v) => {
+      const status = !v.engine_on ? ['var(--muted)', 'engine off'] : v.speed < 2 ? ['var(--warn)', 'idling'] : ['var(--ok)', 'moving'];
+      const fuelCls = v.fuel_level < 5 ? 'crit' : v.fuel_level < 15 ? 'low' : '';
+      const zones = (state.zonesByVehicle.get(v.vehicle_id) || []).map((z) => `<span class="tag">${z}</span>`).join('') || '<span style="color:var(--muted)">—</span>';
+      return `<tr>
+        <td><b style="font-family:var(--mono)">${v.vehicle_id}</b></td>
+        <td><span class="status-dot" style="background:${status[0]}"></span>${status[1]}</td>
+        <td class="num">${fmt(v.speed, 1)}</td>
+        <td class="num">${fmt(v.max_speed, 0)}</td>
+        <td><span class="bar ${fuelCls}"><i style="width:${Math.max(0, Math.min(100, v.fuel_level))}%"></i></span><span style="font-family:var(--mono)">${fmt(v.fuel_level, 0)}%</span></td>
+        <td class="num">${fmt((v.idle_ratio || 0) * 100, 0)}%</td>
+        <td class="num">${fmt((v.distance_m || 0) / 1000, 2)} km</td>
+        <td>${zones}</td>
+        <td style="color:var(--muted);font-family:var(--mono)">${v.last ? ago(v.last) : '—'}</td>
+      </tr>`;
+    });
+    $('vehicles-body').innerHTML = rows.join('') || '<tr><td colspan="9" class="empty">No vehicles yet</td></tr>';
+    $('veh-count').textContent = state.vehicles.size || '';
+  }
+
+  function pushFeed(item) {
+    state.feed.unshift(item);
+    if (state.feed.length > 150) state.feed.pop();
+    $('feed').innerHTML = state.feed.map((f) => `<li>
+      <span class="sev ${f.sev}">${f.sev}</span>
+      <div class="msg"><b>${f.vehicle}</b> ${f.text} ${f.detail ? `<span>· ${f.detail}</span>` : ''}</div>
+      <time>${timeHHMMSS(f.at)}</time></li>`).join('');
+    $('feed-count').textContent = state.feed.length;
+  }
+
+  // ---- data: REST snapshot + SSE live stream -----------------------------------
+  async function loadZones() {
+    try { const r = await (await fetch('/api/v1/zones')).json(); state.zones = r.zones || []; renderMap(); } catch (e) { console.warn('zones', e); }
+  }
+  async function pollFleet() {
+    try {
+      const [fleet, zones, stats] = await Promise.all([
+        fetch('/api/v1/fleet').then((r) => r.json()),
+        fetch('/api/v1/zones').then((r) => r.json()),
+        fetch('/api/v1/stats').then((r) => r.json()),
+      ]);
+      for (const s of fleet.vehicles) {
+        const cur = state.vehicles.get(s.vehicle_id) || {};
+        state.vehicles.set(s.vehicle_id, { ...cur, ...s, speed: s.avg_speed, last: cur.last || s.window_end });
+      }
+      state.zonesByVehicle = new Map();
+      for (const [zone, ids] of Object.entries(zones.occupancy || {})) for (const id of ids) state.zonesByVehicle.set(id, [...(state.zonesByVehicle.get(id) || []), zone]);
+      state.alertCount = stats.alerts_raised;
+      renderKPIs(fleet.summary); renderTable(); renderMap();
+      $('uptime').textContent = `up ${(stats.uptime_seconds / 60).toFixed(0)}m`;
+      const elapsed = (Date.now() - state.rate.since) / 1000;
+      if (elapsed >= 2) { state.rate.value = state.rate.count / elapsed; state.rate.count = 0; state.rate.since = Date.now(); }
+      $('k-rate').innerHTML = `${fmt(state.rate.value, 1)}<small>/s</small>`;
+    } catch (e) { console.warn('poll', e); }
+  }
+
+  async function loadRecentAlerts() {
+    try {
+      const alerts = await (await fetch('/api/v1/alerts?limit=30')).json();
+      for (const a of alerts.reverse()) {
+        pushFeed({ sev: a.severity, vehicle: a.vehicle_id, text: a.kind.replace('_', ' '), detail: a.message, at: a.at });
+        const t = new Date(a.at).getTime();
+        if (Date.now() - t < 30000) state.alertAt.set(a.vehicle_id, Math.max(state.alertAt.get(a.vehicle_id) || 0, t));
+      }
+    } catch (e) { console.warn('alerts', e); }
+  }
+
+  function setConn(status) {
+    const el = $('conn'); el.className = 'pill ' + status; $('conn-text').textContent = status === 'live' ? 'live' : status === 'down' ? 'reconnecting' : 'connecting';
+  }
+
+  function connect() {
+    const es = new EventSource('/api/v1/stream');
+    es.onopen = () => setConn('live');
+    es.onerror = () => setConn('down');
+    es.addEventListener('reading', (e) => {
+      const ev = JSON.parse(e.data), r = ev.payload;
+      const cur = state.vehicles.get(r.vehicle_id) || { vehicle_id: r.vehicle_id };
+      Object.assign(cur, { lat: r.lat, lng: r.lng, speed: r.speed, fuel_level: r.fuel_level, engine_on: r.engine_on, last: r.timestamp });
+      state.vehicles.set(r.vehicle_id, cur);
+      const tr = state.trails.get(r.vehicle_id) || []; tr.push([r.lat, r.lng]); if (tr.length > 120) tr.shift(); state.trails.set(r.vehicle_id, tr);
+      state.rate.count++;
+      scheduleMap();
+    });
+    es.addEventListener('alert', (e) => {
+      const ev = JSON.parse(e.data), a = ev.payload; state.lastSeq = ev.seq; state.alertCount++;
+      state.alertAt.set(a.vehicle_id, Date.now());
+      pushFeed({ sev: a.severity, vehicle: a.vehicle_id, text: a.kind.replace('_', ' '), detail: a.message, at: a.at });
+      $('k-alerts').textContent = state.alertCount; $('seq').textContent = `seq ${ev.seq}`;
+    });
+    es.addEventListener('geofence', (e) => {
+      const ev = JSON.parse(e.data), t = ev.payload; state.lastSeq = ev.seq;
+      const dwell = t.dwell_seconds ? `after ${(t.dwell_seconds / 60).toFixed(1)} min` : '';
+      pushFeed({ sev: 'geofence', vehicle: t.vehicle_id, text: `${t.event === 'enter' ? 'entered' : 'left'} ${t.zone}`, detail: dwell, at: t.at });
+      $('seq').textContent = `seq ${ev.seq}`;
+      pollFleet();
+    });
+    es.addEventListener('gap', () => { pollFleet(); loadRecentAlerts(); });
+  }
+
+  let mapTimer = null;
+  function scheduleMap() { if (!mapTimer) mapTimer = setTimeout(() => { mapTimer = null; renderMap(); }, 250); }
+
+  loadZones().then(loadRecentAlerts).then(pollFleet);
+  connect();
+  setInterval(pollFleet, 2000);
+})();
+</script>
+</body>
+</html>

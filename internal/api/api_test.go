@@ -371,3 +371,31 @@ func TestStreamRejectsBadResumeID(t *testing.T) {
 		t.Fatalf("status = %d", resp.StatusCode)
 	}
 }
+
+func TestExtraHandlersMountAlongsideAPI(t *testing.T) {
+	st, _ := storage.Open(filepath.Join(t.TempDir(), "ops.log"), storage.WithSync(storage.SyncNone))
+	defer st.Close()
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	eng, _ := engine.New(engine.Config{Store: st, Logger: quiet})
+	root := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write([]byte("<html>dashboard</html>"))
+	})
+	metricsH := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("up 1\n")) })
+	srv := httptest.NewServer(New(eng, WithLogger(quiet), WithExtraHandler("GET /", root), WithExtraHandler("GET /metrics", metricsH)))
+	defer srv.Close()
+
+	for path, want := range map[string]int{"/": 200, "/metrics": 200, "/api/v1/fleet": 200, "/api/v1/nope": 404, "/other": 404} {
+		resp, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Errorf("%s = %d, want %d", path, resp.StatusCode, want)
+		}
+	}
+}

@@ -1,6 +1,8 @@
 // Command server runs the IoT analytics engine as an HTTP service: it ingests
 // telemetry over REST, computes rolling fleet metrics, raises safety alerts,
-// tracks geofences, persists events durably and streams them live over SSE.
+// tracks geofences, persists events durably, streams them live over SSE,
+// serves an embedded operations dashboard at / and Prometheus metrics at
+// /metrics.
 //
 //	go run ./cmd/server -simulate 6     # built-in fleet simulator
 //	go run ./cmd/server                  # ingest from real devices via POST /api/v1/telemetry
@@ -20,6 +22,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -27,9 +30,11 @@ import (
 	"iotanalytics/internal/engine"
 	"iotanalytics/internal/geo"
 	"iotanalytics/internal/geofence"
+	"iotanalytics/internal/metrics"
 	"iotanalytics/internal/simulator"
 	"iotanalytics/internal/storage"
 	"iotanalytics/internal/telematics"
+	"iotanalytics/web"
 )
 
 type config struct {
@@ -137,8 +142,17 @@ func run(cfg config, log *slog.Logger) error {
 	log.Info("engine ready", "window", cfg.window, "cooldown", cfg.cooldown, "rules", eng.Alerts().Rules(),
 		"zones", len(zones), "speed_limit", cfg.speedLimit)
 
+	// Observability + dashboard.
+	exporter := metrics.New(eng)
+	defer exporter.Close()
+
 	// HTTP.
-	handler := api.New(eng, api.WithLogger(log), api.WithCORS(cfg.corsOrigin))
+	handler := api.New(eng,
+		api.WithLogger(log),
+		api.WithCORS(cfg.corsOrigin),
+		api.WithExtraHandler("GET /metrics", exporter),
+		api.WithExtraHandler("GET /", web.Handler()),
+	)
 	srv := &http.Server{
 		Addr:              cfg.addr,
 		Handler:           handler,
@@ -149,7 +163,8 @@ func run(cfg config, log *slog.Logger) error {
 	}
 	errCh := make(chan error, 1)
 	go func() {
-		log.Info("http listening", "addr", cfg.addr)
+		log.Info("http listening", "addr", cfg.addr, "dashboard", "http://localhost"+portOf(cfg.addr)+"/",
+			"metrics", "/metrics", "stream", "/api/v1/stream")
 		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
@@ -183,6 +198,14 @@ func run(cfg config, log *slog.Logger) error {
 	log.Info("stopped", "ingested", stats.Ingested, "alerts", stats.Alerts,
 		"transitions", stats.Transitions, "stored_events", stats.StoredEvents)
 	return nil
+}
+
+// portOf returns the ":port" part of a listen address for log hints.
+func portOf(addr string) string {
+	if i := strings.LastIndex(addr, ":"); i >= 0 {
+		return addr[i:]
+	}
+	return ""
 }
 
 // defaultZones are demo geofences around San Jose, CA: a depot, the airport,
